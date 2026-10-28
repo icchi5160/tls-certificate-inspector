@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: build-and-test
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y clang-format-18
+      - run: clang-format-18 --dry-run --Werror include/*.hpp src/*.cpp tests/*.cpp
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        sanitizers: [OFF, ON]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y cmake gcc g++ make curl ca-certificates python3-cryptography
+      - run: bash scripts/install-wolfssl.sh "$GITHUB_WORKSPACE/.deps/wolfssl-5.9.4"
+      - run: cmake -S . -B build -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/.deps/wolfssl-5.9.4" -DENABLE_SANITIZERS=${{ matrix.sanitizers }} -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake --build build --parallel 2
+      - run: ctest --test-dir build --output-on-failure
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1

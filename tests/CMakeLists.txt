@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-only
+
+foreach(name cli certificate)
+    add_executable(test_${name} test_${name}.cpp)
+    target_link_libraries(test_${name} PRIVATE inspector_core)
+    target_compile_options(test_${name} PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME unit_${name} COMMAND test_${name})
+endforeach()
+target_link_options(test_cli PRIVATE -Wl,--wrap=getaddrinfo)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(COMMAND "${Python3_EXECUTABLE}" -c "import cryptography" RESULT_VARIABLE CRYPTOGRAPHY_MISSING OUTPUT_QUIET ERROR_QUIET)
+if(CRYPTOGRAPHY_MISSING)
+    message(FATAL_ERROR "Tests need Python cryptography: apt install python3-cryptography (or set BUILD_TESTING=OFF).")
+endif()
+add_test(NAME integration COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration.py" "$<TARGET_FILE:tls-inspector>")
+set_tests_properties(integration PROPERTIES TIMEOUT 90)
