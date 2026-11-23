@@ -80,7 +80,7 @@ with tempfile.TemporaryDirectory(prefix='tls-inspector-tests-') as temp:
     def arguments(port, ca='ca'):
         return ['localhost', '--port', str(port), '--ca-file', str(directory / (ca + '.pem')), '--timeout', '2']
     for version in ('1.3', '1.2'):
-        for stem, bits, algorithm in [('valid', 2048, 'RSA'), ('ec', 256, 'EC'), ('chain', 2048, 'RSA')]:
+        for stem, bits, algorithm in [('valid', 2048, 'RSA'), ('ec', 256, 'EC'), ('chain', 2048, 'RSA'), ('cross-signed-chain', 2048, 'RSA')]:
             with server(directory, stem, version) as (port, names):
                 data = run(arguments(port) + ['--tls', version], 0)
                 # A TLS retry can produce another ClientHello and SNI callback.
@@ -108,7 +108,8 @@ with tempfile.TemporaryDirectory(prefix='tls-inspector-tests-') as temp:
             ('expired', 'ca', ['EXPIRED_CERTIFICATE']), ('future', 'ca', ['NOT_YET_VALID']),
             ('mismatch', 'ca', ['HOSTNAME_MISMATCH']), ('valid', 'other-ca', ['INVALID_CERTIFICATE_CHAIN', 'UNTRUSTED_CA']),
             ('self', 'ca', ['INVALID_CERTIFICATE_CHAIN', 'UNTRUSTED_CA']),
-            ('missing-intermediate', 'ca', ['INVALID_CERTIFICATE_CHAIN'])]:
+            ('missing-intermediate', 'ca', ['INVALID_CERTIFICATE_CHAIN']),
+            ('cross-signed-chain', 'unrelated-ca', ['INVALID_CERTIFICATE_CHAIN', 'UNTRUSTED_CA'])]:
             with server(directory, stem, version) as (port, _):
                 data = run(arguments(port, ca) + ['--tls', version], 3)
                 assert data['error']['category'] in categories, data

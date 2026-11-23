@@ -39,6 +39,7 @@ tar -xzf "$workdir/source.tar.gz" -C "$workdir/source" --strip-components=1
     -DWOLFSSL_OPENSSLEXTRA=yes \
     -DWOLFSSL_TLS13=yes \
     -DWOLFSSL_SNI=yes \
+    -DWOLFSSL_ALT_CERT_CHAINS=yes \
     -DWOLFSSL_EXAMPLES=no \
     -DWOLFSSL_CRYPT_TESTS=no
 "$cmake_bin" --build "$workdir/build" --parallel 2

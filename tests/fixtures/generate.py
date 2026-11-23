@@ -61,6 +61,15 @@ def generate(directory):
     save('chain', leaf, leaf_key)
     with (directory / 'chain.pem').open('ab') as f:
         f.write(inter.public_bytes(serialization.Encoding.PEM))
+    # Root A is trusted locally; the server also sends A cross-signed by B.
+    cross_signed_ca = certificate('Inspector Test Root', ca_key.public_key(), other.subject, other_key, ca=True)
+    save('cross-signed-chain', leaf, leaf_key)
+    with (directory / 'cross-signed-chain.pem').open('ab') as f:
+        f.write(inter.public_bytes(serialization.Encoding.PEM))
+        f.write(cross_signed_ca.public_bytes(serialization.Encoding.PEM))
+    unrelated_key = key()
+    unrelated = certificate('Unrelated Root', unrelated_key.public_key(), name('Unrelated Root'), unrelated_key, ca=True)
+    save('unrelated-ca', unrelated, unrelated_key)
     return directory
 
 if __name__ == '__main__':

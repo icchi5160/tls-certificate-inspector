@@ -15,7 +15,7 @@ A small C++17 CLI for inspecting a TLS server's verified X.509 leaf certificate 
 
 ## Requirements
 
-Ubuntu Linux, a C++17 compiler, CMake >= 3.16, and wolfSSL >= 5.9.4 with TLS 1.2/1.3, SNI, `OPENSSL_EXTRA`, `KEEP_PEER_CERT`, and certificate date validation enabled. Headers must match the linked library. Configuration rejects older versions, missing required features, disabled certificate time checking, and header/runtime version mismatches.
+Ubuntu Linux, a C++17 compiler, CMake >= 3.16, and wolfSSL >= 5.9.4 with TLS 1.2/1.3, SNI, `OPENSSL_EXTRA`, `KEEP_PEER_CERT`, `WOLFSSL_ALT_CERT_CHAINS`, and certificate date validation enabled. Headers must match the linked library. Configuration rejects older versions, missing required features, disabled certificate time checking, and header/runtime version mismatches.
 
 The tested baseline is upstream **wolfSSL 5.9.4**, GCC 13.3, CMake 3.28.3, Python 3.12, and Python cryptography 41.0.7 on Ubuntu 24.04. CI builds the same pinned wolfSSL release. Version 5.9.4 fixes certificate-validation vulnerabilities described in its [release notes](https://github.com/wolfSSL/wolfssl/releases/tag/v5.9.4-stable), including CVE-2026-93302. Keep monitoring upstream security releases and rerun the tests when updating; the minimum version is not a permanent guarantee that all future issues are fixed.
 
@@ -46,6 +46,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 The script downloads upstream `v5.9.4-stable`, verifies its pinned SHA-256 checksum, and builds a shared library with the required features. The tag resolves to commit `3c5eead44904df64e6a5a1f4ebdce377d35a849a`; both the version and archive checksum must be reviewed when updating. `.deps/` is ignored by Git. The application build does not download dependencies automatically, and the tests themselves require no internet access.
+
+After changing the required wolfSSL build features, rerun the installation script for the same prefix, then configure and rebuild the application. Rebuilding only `tls-inspector` does not change the external library's feature set.
 
 To build only the application, add `-DBUILD_TESTING=OFF`. For a nonstandard wolfSSL installation, pass `-DCMAKE_PREFIX_PATH=/path/to/prefix`, or set `WOLFSSL_INCLUDE_DIR` and `WOLFSSL_LIBRARY` explicitly. If an existing build cache points at an older installation, configure a fresh build directory or clear the cached paths with `cmake -U 'WOLFSSL_*' -S . -B build -DCMAKE_PREFIX_PATH=/path/to/prefix`. CMake includes the library's generated `wolfssl/options.h`, checks required features with a compile/link probe, and runs a version probe to confirm the loaded library matches the headers. This configuration step requires a native runnable build, not cross-compilation. Install with `cmake --install build --prefix /your/prefix` if desired.
 
@@ -118,6 +120,8 @@ TLS authenticates the peer and establishes encrypted communication. X.509 certif
 
 With `WOLFSSL_VERIFY_PEER`, wolfSSL verifies signatures and its certificate-chain constraints against the configured trust anchors and checks certificate dates using the system clock. The application sets `wolfSSL_check_domain_name()` before the handshake to require that the presented identity matches the requested hostname according to wolfSSL's matching rules. SNI (`wolfSSL_UseSNI`) separately tells the server which virtual host is requested; sending SNI alone authenticates nothing. No verification callback overrides errors, and failed handshakes never produce a successful-session report. The tool opens no application-data exchange.
 
+The library must enable `WOLFSSL_ALT_CERT_CHAINS` so wolfSSL can validate a path to a locally trusted CA even if the server also presents cross-signed certificates leading toward another root that is not locally trusted. For example, a server may send root A cross-signed by root B while the trust file already contains self-signed root A. A valid path to trusted A is sufficient; the extra path toward B is not required. Signatures, constraints, dates and hostname verification remain enabled. This uses wolfSSL's official chain-validation mechanism and does not trust arbitrary server-supplied roots. See the [wolfSSL build-option documentation](https://www.wolfssl.com/documentation/manuals/wolfssl/chapter02.html).
+
 Version-specific methods (`wolfTLSv1_3_client_method` / `wolfTLSv1_2_client_method`) select exactly the requested protocol. The negotiated version is also checked before reporting success. Both cross-version failure directions are tested.
 
 wolfSSL reports success/failure for combined chain, validity, and trust verification, rather than three independently observed success results. The report therefore uses:
@@ -165,6 +169,7 @@ CTest runs two C++ unit-test executables and a Python integration suite. No exte
 - JSON escaping, unavailable data, error mapping, text formatting, and terminal control escaping.
 - A deliberately blocked `getaddrinfo` via a test-only linker wrapper: the deadline fires and the resolver child is reaped.
 - RSA and EC leaves and complete intermediate chains under TLS 1.2 and 1.3; SNI, negotiated version, SAN, dates, key sizes, serials and independently computed SHA-256 fingerprints.
+- Cross-signed chains under both protocols: a path to the locally trusted root succeeds, while an unrelated trust anchor still fails. This reproduces the alternate-path issue locally without depending on a public website.
 - Expired, future-dated, mismatched, wrong-CA, self-signed and missing-intermediate certificates, under both protocols.
 - Explicitly trusting a self-signed test leaf succeeds; absent that trust it fails.
 - Both protocol mismatch directions, missing/malformed CA files, closed TCP port, plaintext server and stalled TLS handshake.
